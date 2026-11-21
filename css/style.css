@@ -260,3 +260,38 @@ button.legend-row { cursor: pointer; }
 .rank-no { color: var(--muted); font-weight: 700; text-align: center; }
 .rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item { min-width: 0; }
+
+/* ================= M4: 資産・目標 ================= */
+.sub-h { font-size: .9rem; color: var(--muted); margin: 14px 0 6px; }
+.row.hist { padding: 6px 0; border-bottom: 1px solid var(--line); justify-content: space-between; gap: 8px; }
+.hist-note { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-row { gap: 8px; margin: 8px 0; }
+.acc-row input { flex: 1; min-width: 0; }
+
+/* 折れ線 */
+.line-stroke { stroke: var(--sage-dark); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.line-area { fill: color-mix(in srgb, var(--sage) 22%, transparent); stroke: none; }
+.line-dot { fill: #fff; stroke: var(--sage-dark); stroke-width: 2; }
+.axis-label.strong { fill: var(--text); font-weight: 700; }
+
+/* 目標 */
+.goal-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 700px) { .goal-grid { grid-template-columns: 1fr 1fr; } }
+.card.goal { display: flex; align-items: center; gap: 14px; width: 100%; margin: 0; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; }
+.goal-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.goal-name { font-weight: 700; }
+.goal-amt { font-variant-numeric: tabular-nums; font-weight: 600; }
+.goal-need { color: var(--sage-dark); font-weight: 600; }
+.goal-hero { display: flex; align-items: center; gap: 16px; margin: 8px 0 12px; }
+.ok-badge { background: color-mix(in srgb, var(--sage) 30%, #fff); color: var(--sage-dark); }
+.ring-bg { stroke: var(--beige); }
+.ring-fg { stroke: var(--sage); transition: stroke-dasharray .4s; }
+.ring-fg.done { stroke: var(--sage-dark); }
+.ring-text { font-size: 17px; font-weight: 700; fill: var(--text); }
+.ring { flex: none; }
+.card.goal.done { background: color-mix(in srgb, var(--sage) 10%, #fff); }
+
+/* タブが7つになったため、ラベルを小さめにして収める */
+.nav-item { font-size: .68rem; padding: 0; }
+.nav-icon { font-size: 1.2rem; }
+@media (min-width: 900px) and (orientation: landscape) { .nav-item { font-size: .8rem; } .nav-icon { font-size: 1.4rem; } }

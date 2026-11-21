@@ -7,6 +7,8 @@ import { paintHome, paintHistory } from './history.js';
 import { openEntry } from './entry.js';
 import { paintBudget } from './budget.js';
 import { paintStats } from './stats.js';
+import { paintAssets } from './assets.js';
+import { paintGoals } from './goals.js';
 
 const root = document.getElementById('app');
 const render = (...nodes) => fill(root, ...nodes);
@@ -120,8 +122,10 @@ const TABS = [
   { id: 'history', label: '履歴', icon: '📒' },
   { id: 'budget', label: '予算', icon: '🎯' },
   { id: 'stats', label: '統計', icon: '📊' },
+  { id: 'assets', label: '資産', icon: '💰' },
+  { id: 'goals', label: '目標', icon: '🌱' },
   { id: 'settings', label: '設定', icon: '⚙️' }
-  // M4 以降: 資産 / 目標 / メモ
+  // M5: メモ
 ];
 let lastTab = 'home';
 
@@ -132,7 +136,7 @@ function viewMain(tab) {
   const nav = h('nav', { class: 'nav', 'aria-label': 'メイン' }, TABS.map((t) =>
     h('button', { class: 'nav-item' + (t.id === tab ? ' active' : ''), type: 'button', 'aria-current': t.id === tab ? 'page' : false, onclick: () => viewMain(t.id) },
       h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, t.icon), h('span', {}, t.label))));
-  const fab = tab !== 'settings' && h('button', {
+  const fab = !['settings', 'assets', 'goals'].includes(tab) && h('button', {
     class: 'fab', type: 'button', 'aria-label': '収支を入力',
     onclick: async () => {
       try { await S.ensureBoot(); } catch (e) { return; }
@@ -148,6 +152,8 @@ function paintTab(tab, body) {
   if (tab === 'history') return paintHistory(body);
   if (tab === 'budget') return paintBudget(body);
   if (tab === 'stats') return paintStats(body);
+  if (tab === 'assets') return paintAssets(body);
+  if (tab === 'goals') return paintGoals(body);
   return paintHome(body);
 }
 

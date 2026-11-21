@@ -85,3 +85,49 @@ export function barChart(data, { label = '月別収支' } = {}) {
   });
   return root;
 }
+
+/** 折れ線（面付き）。X軸は日付に比例。points: [{date:'yyyy-MM-dd', value:number}] */
+export function lineChart(points, { label = '推移', fmt = (v) => String(v), toDays } = {}) {
+  const W = 360, H = 200, L = 8, R = 8, T = 22, B = 26;
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart line', role: 'img', 'aria-label': label });
+  if (!points.length) return root;
+  const xs = points.map((p) => toDays(p.date));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const vs = points.map((p) => p.value);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const X = (d) => (x1 === x0 ? (W - L - R) / 2 + L : L + ((d - x0) / (x1 - x0)) * (W - L - R));
+  const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const pts = points.map((p, i) => [X(xs[i]), Y(p.value)]);
+  const f = (n) => n.toFixed(1);
+  root.append(svg('line', { x1: L, x2: W - R, y1: H - B, y2: H - B, class: 'axis' }));
+  if (pts.length > 1) {
+    root.append(
+      svg('path', { d: `M${f(pts[0][0])} ${H - B} ` + pts.map((p) => `L${f(p[0])} ${f(p[1])}`).join(' ') + ` L${f(pts[pts.length - 1][0])} ${H - B} Z`, class: 'line-area' }),
+      svg('polyline', { points: pts.map((p) => `${f(p[0])},${f(p[1])}`).join(' '), class: 'line-stroke', fill: 'none' }));
+  }
+  if (pts.length <= 24) pts.forEach((p) => root.append(svg('circle', { cx: f(p[0]), cy: f(p[1]), r: 3.5, class: 'line-dot' })));
+  const iMax = vs.indexOf(Math.max(...vs)), iMin = vs.indexOf(Math.min(...vs));
+  const tag = (i, dy) => svg('text', { x: Math.min(W - R - 2, Math.max(L + 2, pts[i][0])), y: pts[i][1] + dy, 'text-anchor': pts[i][0] > W * 0.7 ? 'end' : pts[i][0] < W * 0.3 ? 'start' : 'middle', class: 'axis-label strong' }, fmt(vs[i]));
+  root.append(tag(iMax, -8));
+  if (iMin !== iMax) root.append(tag(iMin, 16));
+  const lbl = (s) => s.slice(2).replace(/-/g, '/');
+  root.append(
+    svg('text', { x: L, y: H - 8, class: 'axis-label' }, lbl(points[0].date)),
+    svg('text', { x: W - R, y: H - 8, 'text-anchor': 'end', class: 'axis-label' }, lbl(points[points.length - 1].date)));
+  return root;
+}
+
+/** リングゲージ（達成率）。pct は 0〜100 を超えてもよい（描画は100で頭打ち） */
+export function ring(pct, { size = 84, label = '達成率', done = false } = {}) {
+  const r = 34, C = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, pct));
+  const root = svg('svg', { viewBox: '0 0 84 84', width: size, height: size, class: 'chart ring', role: 'img', 'aria-label': `${label} ${pct}%` });
+  root.append(
+    svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, class: 'ring-bg' }),
+    svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, 'stroke-linecap': 'round', class: 'ring-fg' + (done ? ' done' : ''),
+      'stroke-dasharray': `${(p / 100) * C} ${C}`, transform: 'rotate(-90 42 42)' }),
+    svg('text', { x: 42, y: 47, 'text-anchor': 'middle', class: 'ring-text' }, `${pct}%`));
+  return root;
+}
