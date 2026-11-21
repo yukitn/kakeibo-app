@@ -72,7 +72,7 @@ function viewSetup({ first = false, updateProfile = null } = {}) {
     field('家計簿の名前', name, 'この端末で見分けるための名前です。あとから変えられます'),
     field('GAS の Web アプリ URL', url, 'スプレッドシートの Apps Script をデプロイして発行された URL'),
     field('合言葉', pass, 'GAS のスクリプトプロパティ API_TOKEN と同じもの。パスワード管理アプリの自動入力が使えます'),
-    !isUpdate && field('あなたの表示名（初回のみ）', user),
+    !isUpdate && field('あなたの表示名（はじめて家計簿を作る人だけ）', user, 'すでにある家計簿につなぐ場合は空欄のままで大丈夫です。あとで設定から自分の名前を追加できます'),
     msg, btn,
     !first && h('button', { class: 'btn ghost', type: 'button', onclick: () => (activeProfile() ? viewMain('settings') : route()) }, 'キャンセル')
   );
@@ -225,10 +225,28 @@ function paintSettings(body) {
     [1, 5, 15, 30].map((m) => h('option', { value: m, selected: s.lockMinutes === m }, `${m} 分`)));
 
   const userSel = h('select', { onchange: (e) => { s.defaultUserId[s.activeId] = e.target.value; save(); } }, h('option', {}, '読み込み中…'));
-  S.ensureBoot().then((b) => {
+  const paintUsers = (b) => {
     const cur = s.defaultUserId[s.activeId] || b.users[0]?.id;
-    fill(userSel, ...b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
-  }).catch(() => fill(userSel, h('option', {}, '（取得できません）')));
+    fill(userSel, b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
+  };
+  const newUser = h('input', { type: 'text', maxlength: 20, placeholder: '例: パートナーの名前', 'aria-label': '追加する入力者の名前' });
+  const userMsg = h('p', { class: 'muted small-text', role: 'status' });
+  const USER_COLORS = ['#8FA998', '#8FA7B8', '#D4B067', '#C97B6B', '#A58FB8'];
+  const addUser = async () => {
+    const name = newUser.value.trim();
+    if (!name) { userMsg.textContent = '名前を入力してください'; return; }
+    userMsg.textContent = '追加中…';
+    try {
+      const b = await S.ensureBoot();
+      if (b.users.some((u) => u.name === name)) { userMsg.textContent = 'その名前はすでにあります。上の一覧から選んでください'; return; }
+      const r = await call('master.upsert', { entity: 'user', item: { name, sort: b.users.length + 1, color: USER_COLORS[b.users.length % USER_COLORS.length] } }, { user_id: S.currentUserId() });
+      b.users.push(r);
+      s.defaultUserId[s.activeId] = r.id;     // この端末の入力者として選ぶ
+      save(); paintUsers(b); newUser.value = '';
+      userMsg.textContent = `「${name}」を追加して、この端末の入力者にしました`;
+    } catch (e) { userMsg.textContent = errText(e); }
+  };
+  S.ensureBoot().then(paintUsers).catch(() => fill(userSel, h('option', {}, '（取得できません）')));
 
   fill(body, 
     h('h2', {}, '設定'),
@@ -237,7 +255,10 @@ function paintSettings(body) {
     h('div', { class: 'card' }, h('h3', {}, 'ロック'),
       field('無操作で自動ロックするまで', mins),
       h('button', { class: 'btn small', type: 'button', onclick: () => auth.lock() }, '今すぐロック')),
-    h('div', { class: 'card' }, h('h3', {}, 'この端末の入力者'), field('既定のユーザー', userSel, '端末ごとに保存されます')),
+    h('div', { class: 'card' }, h('h3', {}, 'この端末の入力者'),
+      field('この端末で入力する人', userSel, '端末ごとに保存されます（家族それぞれのスマホで選びます）'),
+      field('自分の名前が無いとき', newUser, '一覧に自分の名前が無ければ、ここで追加できます'),
+      h('button', { class: 'btn small', type: 'button', onclick: addUser }, '＋ 追加して、この端末の入力者にする'), userMsg),
     h('div', { class: 'card' }, h('h3', {}, 'バックアップ（書き出し）'),
       h('p', { class: 'muted small-text' }, 'データは常にあなたのスプレッドシートにあります。ここでは Excel などで開ける CSV を保存できます。'),
       h('div', { class: 'row-left' },

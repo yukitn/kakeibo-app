@@ -2,7 +2,7 @@
 // - 新バージョンは install 時に全ファイルを「ネットワークから取り直して(reload)」一式まとめて保存し、揃ってから切り替える
 //   （ファイルの新旧が混ざらない）。更新を配るときは、必ず CACHE 名を変えること。
 // - GAS への通信（別オリジンの POST）には一切介入しない＝データ/合言葉をキャッシュしない。
-const CACHE = 'kakeibo-shell-v10';
+const CACHE = 'kakeibo-shell-v11';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
