@@ -71,3 +71,15 @@ export function closeAllSheets() {
   document.querySelectorAll('.overlay').forEach((o) => o.remove());
   document.body.classList.remove('no-scroll');
 }
+
+/**
+ * 要素の中身を差し替える（native の replaceChildren は null/false を "null"/"false" という文字で表示してしまうため、
+ * 空の値（null/undefined/false/空文字）を除外し、配列も展開する）。条件式 `cond && h(...)` を安全に渡せる。
+ */
+export function fill(el, ...children) {
+  const nodes = children.flat(Infinity)
+    .filter((c) => c != null && c !== false && c !== '')
+    .map((c) => (c.nodeType ? c : document.createTextNode(String(c))));
+  el.replaceChildren(...nodes);
+  return el;
+}

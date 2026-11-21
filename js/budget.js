@@ -1,7 +1,7 @@
 // 予算画面: 大カテゴリ/サブカテゴリ別の使用率バーと、基本・特定月・特定年の予算設定
 import { call } from './api.js';
 import { getPeriod, shiftPeriod, periodOfKey, today } from './period.js';
-import { h, errText, openSheet, toast, yen } from './ui.js';
+import { h, errText, openSheet, toast, yen, fill } from './ui.js';
 import { createKeypad, evaluate } from './keypad.js';
 import { resolveBudget, level, ratioPct, spentMaps, alerts } from './budget-calc.js';
 import * as S from './state.js';
@@ -30,7 +30,7 @@ export async function paintBudget(body) {
   const reload = () => paintBudget(body);
   const list = h('div', {}, h('p', { class: 'muted' }, '読み込み中…'));
 
-  body.replaceChildren(
+  fill(ody, 
     h('h2', {}, '予算'),
     h('div', { class: 'month-nav' },
       h('button', { type: 'button', class: 'btn small', 'aria-label': '前の月', onclick: () => { st.key = shiftPeriod(st.key, -1, S.startDay()).key; reload(); } }, '‹'),
@@ -57,7 +57,7 @@ export async function paintBudget(body) {
     });
     const al = alerts(tops, budgets, spentTop, st.key);
 
-    list.replaceChildren(
+    fill(list, 
       al.length > 0 && h('div', { class: 'card alert', role: 'status' },
         al.map((a) => h('p', {}, (a.level === 'over' ? '⚠️ ' : '🔔 ') + `${a.category.name}：` +
           (a.level === 'over' ? `予算を ${yen(a.used - a.budget)} 超えています` : `予算の ${Math.round((a.used / a.budget) * 100)}% に達しました`)))),
@@ -67,7 +67,7 @@ export async function paintBudget(body) {
       h('div', { class: 'card' }, tops.map((c) => categoryBlock(c, budgets, spentTop, spentSub, reload))),
       h('p', { class: 'note' }, 'カテゴリ名をタップして予算を設定できます。サブカテゴリの予算は別枠で、超過しても警告は大カテゴリの合計のみ表示します。'));
   } catch (e) {
-    list.replaceChildren(h('p', { class: 'msg' }, errText(e)));
+    fill(list, h('p', { class: 'msg' }, errText(e)));
   }
 }
 
@@ -121,7 +121,7 @@ function openBudgetEditor(cat, budgets, reload, parent = null) {
     exprEl.textContent = /[+\-×÷]/.test(expr) ? expr : '';
   };
   const paintScope = () => {
-    seg.replaceChildren(...scopes.map((s) => h('button', {
+    fill(seg, ...scopes.map((s) => h('button', {
       type: 'button', class: 'seg-btn' + (s === scope ? ' on' : ''), 'aria-pressed': String(s === scope),
       onclick: () => { scope = s; const e = existing(); kp.set(e ? String(e.amount) : ''); paintScope(); }
     }, s.label)));

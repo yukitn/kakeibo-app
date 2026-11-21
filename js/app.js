@@ -1,7 +1,7 @@
 import { load, save, activeProfile } from './store.js';
 import * as auth from './auth.js';
 import { call, callWith } from './api.js';
-import { h, field, errText, closeAllSheets } from './ui.js';
+import { h, field, errText, closeAllSheets, fill } from './ui.js';
 import * as S from './state.js';
 import { paintHome, paintHistory } from './history.js';
 import { openEntry } from './entry.js';
@@ -9,7 +9,7 @@ import { paintBudget } from './budget.js';
 import { paintStats } from './stats.js';
 
 const root = document.getElementById('app');
-const render = (...nodes) => root.replaceChildren(...nodes);
+const render = (...nodes) => fill(root, ...nodes);
 
 /* ---------- 画面の振り分け ---------- */
 function route() {
@@ -179,10 +179,10 @@ function paintSettings(body) {
   const userSel = h('select', { onchange: (e) => { s.defaultUserId[s.activeId] = e.target.value; save(); } }, h('option', {}, '読み込み中…'));
   S.ensureBoot().then((b) => {
     const cur = s.defaultUserId[s.activeId] || b.users[0]?.id;
-    userSel.replaceChildren(...b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
-  }).catch(() => userSel.replaceChildren(h('option', {}, '（取得できません）')));
+    fill(userSel, ...b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
+  }).catch(() => fill(userSel, h('option', {}, '（取得できません）')));
 
-  body.replaceChildren(
+  fill(ody, 
     h('h2', {}, '設定'),
     profiles,
     h('div', { class: 'card' }, h('h3', {}, '接続'), p && h('p', { class: 'muted break' }, p.url), test, status),

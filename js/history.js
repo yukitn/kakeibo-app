@@ -1,7 +1,7 @@
 // ホーム（月次サマリ）と履歴（検索・編集・削除）
 import { call } from './api.js';
 import { getPeriod, shiftPeriod, periodOfKey, today } from './period.js';
-import { h, chip, errText, openSheet, toast, yen, dateLabel } from './ui.js';
+import { h, chip, errText, openSheet, toast, yen, dateLabel, fill } from './ui.js';
 import { openEntry } from './entry.js';
 import { alerts } from './budget-calc.js';
 import * as S from './state.js';
@@ -62,14 +62,14 @@ export function openDetail(t, onChanged) {
   if (t.receipt_file_id) {
     imgBox.append(h('p', { class: 'muted' }, '領収書を読み込み中…'));
     call('image.get', { file_id: t.receipt_file_id }, { user_id: S.currentUserId() }).then((r) => {
-      imgBox.replaceChildren(h('img', { src: `data:${r.mime};base64,${r.data_base64}`, alt: '領収書' }));
-    }).catch((e) => imgBox.replaceChildren(h('p', { class: 'msg' }, '領収書を読み込めません: ' + errText(e))));
+      fill(imgBox, h('img', { src: `data:${r.mime};base64,${r.data_base64}`, alt: '領収書' }));
+    }).catch((e) => fill(imgBox, h('p', { class: 'msg' }, '領収書を読み込めません: ' + errText(e))));
   }
 }
 
 /* ---------- ホーム ---------- */
 export async function paintHome(body) {
-  body.replaceChildren(h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
+  fill(ody, h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
   try {
     await S.ensureBoot();
     const period = getPeriod(today(), S.startDay());
@@ -101,7 +101,7 @@ export async function paintHome(body) {
       }
     } catch { /* 予算が取れなくても他の表示を優先 */ }
 
-    body.replaceChildren(
+    fill(ody, 
       h('h2', {}, 'ホーム'),
       h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`),
       alertCard,
@@ -119,7 +119,7 @@ export async function paintHome(body) {
           : h('p', { class: 'muted' }, 'まだ入力がありません。'))
     );
   } catch (e) {
-    body.replaceChildren(h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
+    fill(ody, h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
   }
 }
 
@@ -145,7 +145,7 @@ export async function paintHistory(body) {
     h('option', { value: '' }, 'すべてのタグ'),
     S.tags().map((t) => h('option', { value: t.id, selected: hist.tag === t.id }, '#' + t.name)));
 
-  body.replaceChildren(
+  fill(ody, 
     h('h2', {}, '履歴'),
     h('div', { class: 'month-nav' },
       h('button', { type: 'button', class: 'btn small', 'aria-label': '前の月', onclick: () => { hist.key = shiftPeriod(hist.key, -1, S.startDay()).key; reload(); } }, '‹'),
@@ -168,14 +168,14 @@ export async function paintHistory(body) {
     if (hist.tag) items = items.filter((t) => String(t.tags).split(';').includes(hist.tag));
 
     summary.textContent = `${items.length}件　収入 ${yen(sum(items, 'income'))} ／ 支出 ${yen(sum(items, 'expense'))}`;
-    if (!items.length) { list.replaceChildren(h('p', { class: 'muted' }, '該当する記録はありません')); return; }
+    if (!items.length) { fill(list, h('p', { class: 'muted' }, '該当する記録はありません')); return; }
     const groups = new Map();
     items.forEach((t) => groups.set(t.date, [...(groups.get(t.date) || []), t]));
-    list.replaceChildren(...[...groups].map(([date, arr]) =>
+    fill(list, ...[...groups].map(([date, arr]) =>
       h('section', { class: 'card' },
         h('h3', { class: 'day' }, dateLabel(date)),
         h('div', { class: 'tx-list' }, arr.map((t) => txRow(t, (x) => openDetail(x, reload)))))));
   } catch (e) {
-    list.replaceChildren(h('p', { class: 'msg' }, errText(e)));
+    fill(list, h('p', { class: 'msg' }, errText(e)));
   }
 }

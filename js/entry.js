@@ -2,7 +2,7 @@
 import { call } from './api.js';
 import { load, save } from './store.js';
 import { today, shiftDay } from './period.js';
-import { h, chip, field, errText, openSheet, toast, yen } from './ui.js';
+import { h, chip, field, errText, openSheet, toast, yen, fill } from './ui.js';
 import { createKeypad, evaluate } from './keypad.js';
 import { compressImage, stripDataUrl } from './image.js';
 import * as S from './state.js';
@@ -53,7 +53,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
   }
 
   function paintType() {
-    typeBar.replaceChildren(
+    fill(typeBar, 
       ...[['expense', '支出'], ['income', '収入']].map(([k, label]) =>
         h('button', {
           type: 'button', class: 'seg-btn ' + k + (st.type === k ? ' on' : ''), 'aria-pressed': String(st.type === k),
@@ -62,13 +62,13 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
   }
 
   function paintCats() {
-    catBox.replaceChildren(...S.topCategories(st.type).map((c) =>
+    fill(catBox, ...S.topCategories(st.type).map((c) =>
       chip(c.name, {
         icon: c.icon, selected: st.categoryId === c.id,
         onclick: () => { st.categoryId = c.id; st.subId = ''; paintCats(); }
       })));
     const subs = st.categoryId ? S.subCategories(st.categoryId) : [];
-    subBox.replaceChildren(...subs.map((c) =>
+    sufill(Box, ...subs.map((c) =>
       chip(c.name, {
         kind: 'sub', selected: st.subId === c.id,
         onclick: () => { st.subId = st.subId === c.id ? '' : c.id; paintCats(); }   // もう一度押すと解除
@@ -77,7 +77,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
   }
 
   function paintAccounts() {
-    accBox.replaceChildren(...S.accounts().map((a) =>
+    fill(accBox, ...S.accounts().map((a) =>
       chip(a.name, { selected: st.accountId === a.id, onclick: () => { st.accountId = a.id; paintAccounts(); } })));
   }
 
@@ -85,7 +85,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
     const addInput = h('input', { type: 'text', maxlength: 20, placeholder: '新しいタグ', class: 'tag-input', 'aria-label': '新しいタグ名' });
     const addBtn = h('button', { type: 'button', class: 'chip add', onclick: () => addTag(addInput) }, '＋追加');
     addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(addInput); } });
-    tagBox.replaceChildren(
+    fill(tagBox, 
       ...S.tags().map((t) => chip('#' + t.name, {
         selected: st.tags.includes(t.id),
         onclick: () => { st.tags = st.tags.includes(t.id) ? st.tags.filter((x) => x !== t.id) : [...st.tags, t.id]; paintTags(); }
@@ -112,7 +112,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
       type: 'date', value: st.date, class: 'date-input', 'aria-label': '日付を選ぶ',
       onchange: (e) => { if (e.target.value) { st.date = e.target.value; paintDate(); } }
     });
-    dateBox.replaceChildren(
+    fill(dateBox, 
       chip('今日', { selected: st.date === t, onclick: () => { st.date = t; paintDate(); } }),
       chip('昨日', { selected: st.date === y, onclick: () => { st.date = y; paintDate(); } }),
       picker);
@@ -132,7 +132,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
       }
     });
     const cam = fileIn(true), album = fileIn(false);
-    imgBox.replaceChildren(
+    fill(imgBox, 
       h('div', { class: 'row-left' },
         h('button', { type: 'button', class: 'btn small', onclick: () => cam.click() }, '📷 撮影'),
         h('button', { type: 'button', class: 'btn small', onclick: () => album.click() }, '🖼 アルバム'),
