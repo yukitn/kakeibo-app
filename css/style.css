@@ -1,0 +1,90 @@
+:root {
+  --bg: #FAF8F4;
+  --card: #FFFFFF;
+  --text: #3A3D3F;
+  --muted: #7A7F82;
+  --sage: #8FA998;
+  --sage-dark: #5F7F6B;
+  --blue: #8FA7B8;
+  --beige: #E8DFD0;
+  --warn: #C97B6B;
+  --caution: #D4B067;
+  --line: #ECE6DB;
+  --radius: 16px;
+  --shadow: 0 2px 10px rgba(58, 61, 63, 0.06);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  min-height: 100vh;
+}
+h1, h2, h3 { margin: 0 0 .5rem; line-height: 1.3; }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.05rem; }
+p { margin: .25rem 0 .75rem; }
+.muted { color: var(--muted); font-size: .92rem; }
+.break { word-break: break-all; }
+.ok { color: var(--sage-dark); font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); opacity: 0; }
+
+/* ---- 中央寄せ画面（セットアップ/ロック） ---- */
+.center { max-width: 440px; margin: 0 auto; padding: 8vh 16px 32px; }
+.logo { font-size: 1.8rem; text-align: center; color: var(--sage-dark); }
+.lead { text-align: center; color: var(--muted); }
+.note { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 1rem; }
+
+/* ---- カード・フォーム ---- */
+.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+.form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: .9rem; font-weight: 600; }
+.hint { font-size: .8rem; color: var(--muted); }
+input, select {
+  font: inherit; color: inherit; width: 100%; min-height: 48px; padding: 10px 12px;
+  border: 1.5px solid var(--line); border-radius: 12px; background: #fff;
+}
+input:focus-visible, select:focus-visible, .btn:focus-visible, .nav-item:focus-visible {
+  outline: 3px solid var(--blue); outline-offset: 2px;
+}
+.msg { color: var(--warn); min-height: 1.2em; margin: 0; font-size: .92rem; }
+
+.btn {
+  font: inherit; min-height: 48px; padding: 10px 18px; border: 0; border-radius: 12px;
+  background: var(--beige); color: var(--text); cursor: pointer; font-weight: 600;
+}
+.btn.primary { background: var(--sage-dark); color: #fff; }
+.btn.ghost { background: transparent; color: var(--muted); }
+.btn.small { min-height: 44px; padding: 8px 14px; font-size: .92rem; }
+.btn:disabled { opacity: .55; cursor: default; }
+.row { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 8px 0; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---- メインレイアウト: スマホ/iPad縦=下部タブ、iPad横=左サイドバー ---- */
+.shell { display: flex; flex-direction: column-reverse; min-height: 100vh; }
+.nav {
+  position: sticky; bottom: 0; display: flex; justify-content: space-around;
+  background: var(--card); border-top: 1px solid var(--line); padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+}
+.nav-item {
+  flex: 1; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; background: none; border: 0; color: var(--muted); font: inherit; font-size: .75rem; cursor: pointer; border-radius: 12px;
+}
+.nav-item.active { color: var(--sage-dark); font-weight: 700; background: color-mix(in srgb, var(--sage) 16%, transparent); }
+.nav-icon { font-size: 1.3rem; }
+.main { flex: 1; padding: 16px; width: 100%; max-width: 960px; margin: 0 auto; }
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .shell { flex-direction: row; }
+  .nav {
+    position: sticky; top: 0; height: 100vh; width: 120px; flex-direction: column; justify-content: flex-start;
+    gap: 6px; padding: 16px 8px; border-top: 0; border-right: 1px solid var(--line);
+  }
+  .nav-item { flex: none; }
+  .main { padding: 24px 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
