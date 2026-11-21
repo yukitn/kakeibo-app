@@ -1,39 +1,20 @@
 import { load, save, activeProfile } from './store.js';
 import * as auth from './auth.js';
-import { call, callWith, ApiError } from './api.js';
-import { getPeriod, today } from './period.js';
+import { call, callWith } from './api.js';
+import { h, field, errText, closeAllSheets } from './ui.js';
+import * as S from './state.js';
+import { paintHome, paintHistory } from './history.js';
+import { openEntry } from './entry.js';
 
 const root = document.getElementById('app');
-let boot = null; // bootstrap データ（ロック時に破棄）
-
-/* ---------- 小さな DOM ヘルパー（innerHTML は使わず XSS を避ける） ---------- */
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === false || v == null) continue;
-    if (k === 'class') el.className = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else el.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of children.flat()) {
-    if (c == null || c === false) continue;
-    el.append(c.nodeType ? c : document.createTextNode(String(c)));
-  }
-  return el;
-}
 const render = (...nodes) => root.replaceChildren(...nodes);
-const errText = (e) => (e instanceof ApiError ? e.message : '予期しないエラーが発生しました');
-
-function field(label, input, hint) {
-  return h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input, hint && h('span', { class: 'hint' }, hint));
-}
 
 /* ---------- 画面の振り分け ---------- */
 function route() {
   const p = activeProfile();
   if (!p) return viewSetup({ first: true });
   if (!auth.isUnlocked()) return viewLock(p);
-  return viewMain('home');
+  return viewMain(lastTab);
 }
 
 /* ---------- セットアップ（新規プロファイル登録 / 合言葉更新） ---------- */
@@ -72,7 +53,7 @@ function viewSetup({ first = false, updateProfile = null } = {}) {
         }
         save();
         auth.setToken(pass.value);
-        boot = null;
+        S.resetBoot();
         viewMain('home');
       } catch (e) {
         msg.textContent = errText(e);
@@ -110,7 +91,7 @@ function viewLock(profile) {
       msg.textContent = '';
       btn.disabled = true;
       try {
-        if (await auth.unlock(profile, pass.value)) { viewMain('home'); return; }
+        if (await auth.unlock(profile, pass.value)) { viewMain(lastTab); return; }
         msg.textContent = '合言葉が違います';
       } finally { btn.disabled = false; pass.select(); }
     }
@@ -134,48 +115,34 @@ function viewLock(profile) {
 /* ---------- メイン（タブ） ---------- */
 const TABS = [
   { id: 'home', label: 'ホーム', icon: '🏠' },
+  { id: 'history', label: '履歴', icon: '📒' },
   { id: 'settings', label: '設定', icon: '⚙️' }
-  // M2 以降: 履歴 / 統計 / 予算 / 資産 / 目標 / メモ
+  // M3 以降: 統計 / 予算 / 資産 / 目標 / メモ
 ];
+let lastTab = 'home';
 
 function viewMain(tab) {
+  lastTab = tab;
   const body = h('div', { class: 'content' });
+  const refresh = () => paintTab(tab, body);
   const nav = h('nav', { class: 'nav', 'aria-label': 'メイン' }, TABS.map((t) =>
     h('button', { class: 'nav-item' + (t.id === tab ? ' active' : ''), type: 'button', 'aria-current': t.id === tab ? 'page' : false, onclick: () => viewMain(t.id) },
       h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, t.icon), h('span', {}, t.label))));
-  render(h('div', { class: 'shell' }, nav, h('main', { class: 'main' }, body)));
-  (tab === 'settings' ? paintSettings : paintHome)(body);
+  const fab = tab !== 'settings' && h('button', {
+    class: 'fab', type: 'button', 'aria-label': '収支を入力',
+    onclick: async () => {
+      try { await S.ensureBoot(); } catch (e) { return; }
+      openEntry({ onSaved: refresh });
+    }
+  }, '＋');
+  render(h('div', { class: 'shell' }, nav, h('main', { class: 'main' }, body), fab));
+  refresh();
 }
 
-async function ensureBoot() {
-  if (boot) return boot;
-  boot = await call('bootstrap', {}, { user_id: currentUserId() });
-  return boot;
-}
-
-function currentUserId() {
-  const s = load();
-  return s.defaultUserId[s.activeId] || boot?.users?.[0]?.id || '';
-}
-
-async function paintHome(body) {
-  body.replaceChildren(h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
-  try {
-    const b = await ensureBoot();
-    const startDay = Number(b.settings.month_start_day) || 1;
-    const period = getPeriod(today(), startDay);
-    const cats = b.categories.filter((c) => !c.parent_id && c.is_active !== false);
-    body.replaceChildren(
-      h('h2', {}, 'ホーム'),
-      h('div', { class: 'card' },
-        h('p', { class: 'ok' }, '✅ つながりました'),
-        h('p', { class: 'muted' }, `今月の期間: ${period.from} 〜 ${period.to}`),
-        h('p', { class: 'muted' }, `大カテゴリ ${cats.length} 件 / タグ ${b.tags.length} 件 / 支払い方法 ${b.accounts.length} 件 / ユーザー ${b.users.length} 人`)),
-      h('div', { class: 'card' }, h('p', {}, '収支の入力・履歴・統計は次のステップ（M2以降）で追加します。'))
-    );
-  } catch (e) {
-    body.replaceChildren(h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
-  }
+function paintTab(tab, body) {
+  if (tab === 'settings') return paintSettings(body);
+  if (tab === 'history') return paintHistory(body);
+  return paintHome(body);
 }
 
 /* ---------- 設定 ---------- */
@@ -204,7 +171,7 @@ function paintSettings(body) {
     [1, 5, 15, 30].map((m) => h('option', { value: m, selected: s.lockMinutes === m }, `${m} 分`)));
 
   const userSel = h('select', { onchange: (e) => { s.defaultUserId[s.activeId] = e.target.value; save(); } }, h('option', {}, '読み込み中…'));
-  ensureBoot().then((b) => {
+  S.ensureBoot().then((b) => {
     const cur = s.defaultUserId[s.activeId] || b.users[0]?.id;
     userSel.replaceChildren(...b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
   }).catch(() => userSel.replaceChildren(h('option', {}, '（取得できません）')));
@@ -223,7 +190,11 @@ function paintSettings(body) {
 }
 
 /* ---------- 起動 ---------- */
-auth.onLock(() => { boot = null; if (activeProfile()) viewLock(activeProfile()); else route(); });
+auth.onLock(() => {
+  S.resetBoot();
+  closeAllSheets();   // 入力途中のシート・領収書表示を確実に閉じる
+  route();
+});
 auth.startIdleLock();
 route();
 
