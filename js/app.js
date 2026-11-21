@@ -188,7 +188,7 @@ function paintSettings(body) {
     fill(userSel, ...b.users.map((u) => h('option', { value: u.id, selected: u.id === cur }, u.name)));
   }).catch(() => fill(userSel, h('option', {}, '（取得できません）')));
 
-  fill(ody, 
+  fill(body, 
     h('h2', {}, '設定'),
     profiles,
     h('div', { class: 'card' }, h('h3', {}, '接続'), p && h('p', { class: 'muted break' }, p.url), test, status),

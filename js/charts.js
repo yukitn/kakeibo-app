@@ -123,7 +123,7 @@ export function lineChart(points, { label = '推移', fmt = (v) => String(v), to
 export function ring(pct, { size = 84, label = '達成率', done = false } = {}) {
   const r = 34, C = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(100, pct));
-  const root = svg('svg', { viewBox: '0 0 84 84', width: size, height: size, class: 'chart ring', role: 'img', 'aria-label': `${label} ${pct}%` });
+  const root = svg('svg', { viewBox: '0 0 84 84', width: size, height: size, class: 'chart ring', role: 'img', 'aria-label': `${label} ${pct}%`, style: `width:${size}px;height:${size}px` });
   root.append(
     svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, class: 'ring-bg' }),
     svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, 'stroke-linecap': 'round', class: 'ring-fg' + (done ? ' done' : ''),

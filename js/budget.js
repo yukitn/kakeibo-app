@@ -30,7 +30,7 @@ export async function paintBudget(body) {
   const reload = () => paintBudget(body);
   const list = h('div', {}, h('p', { class: 'muted' }, '読み込み中…'));
 
-  fill(ody, 
+  fill(body, 
     h('h2', {}, '予算'),
     h('div', { class: 'month-nav' },
       h('button', { type: 'button', class: 'btn small', 'aria-label': '前の月', onclick: () => { st.key = shiftPeriod(st.key, -1, S.startDay()).key; reload(); } }, '‹'),

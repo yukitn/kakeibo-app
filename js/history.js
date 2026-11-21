@@ -69,7 +69,7 @@ export function openDetail(t, onChanged) {
 
 /* ---------- ホーム ---------- */
 export async function paintHome(body) {
-  fill(ody, h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
+  fill(body, h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
   try {
     await S.ensureBoot();
     const period = getPeriod(today(), S.startDay());
@@ -101,7 +101,7 @@ export async function paintHome(body) {
       }
     } catch { /* 予算が取れなくても他の表示を優先 */ }
 
-    fill(ody, 
+    fill(body, 
       h('h2', {}, 'ホーム'),
       h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`),
       alertCard,
@@ -119,7 +119,7 @@ export async function paintHome(body) {
           : h('p', { class: 'muted' }, 'まだ入力がありません。'))
     );
   } catch (e) {
-    fill(ody, h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
+    fill(body, h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
   }
 }
 
@@ -145,7 +145,7 @@ export async function paintHistory(body) {
     h('option', { value: '' }, 'すべてのタグ'),
     S.tags().map((t) => h('option', { value: t.id, selected: hist.tag === t.id }, '#' + t.name)));
 
-  fill(ody, 
+  fill(body, 
     h('h2', {}, '履歴'),
     h('div', { class: 'month-nav' },
       h('button', { type: 'button', class: 'btn small', 'aria-label': '前の月', onclick: () => { hist.key = shiftPeriod(hist.key, -1, S.startDay()).key; reload(); } }, '‹'),

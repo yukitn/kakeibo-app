@@ -68,7 +68,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
         onclick: () => { st.categoryId = c.id; st.subId = ''; paintCats(); }
       })));
     const subs = st.categoryId ? S.subCategories(st.categoryId) : [];
-    sufill(Box, ...subs.map((c) =>
+    fill(subBox, ...subs.map((c) =>
       chip(c.name, {
         kind: 'sub', selected: st.subId === c.id,
         onclick: () => { st.subId = st.subId === c.id ? '' : c.id; paintCats(); }   // もう一度押すと解除

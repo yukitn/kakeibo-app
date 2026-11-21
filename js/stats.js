@@ -41,7 +41,7 @@ export async function paintStats(body) {
   const rangeFrom = shiftPeriod(cur.key, -(st.months - 1), S.startDay()).from;
   const content = h('div', {}, h('p', { class: 'muted' }, '読み込み中…'));
 
-  fill(ody, 
+  fill(body, 
     h('h2', {}, '統計'),
     h('div', { class: 'seg small', role: 'group', 'aria-label': '期間' },
       RANGES.map(([m, l]) => h('button', { type: 'button', class: 'seg-btn' + (st.months === m ? ' on' : ''), 'aria-pressed': String(st.months === m),

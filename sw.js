@@ -1,6 +1,6 @@
 // アプリシェルのキャッシュ。通信は network-first（更新を即反映）、失敗時のみキャッシュ。
 // GAS への通信（別オリジンの POST）には一切介入しない＝データ/合言葉をキャッシュしない。
-const CACHE = 'kakeibo-shell-v6';
+const CACHE = 'kakeibo-shell-v8';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'icons/icon.svg',
   'js/app.js', 'js/auth.js', 'js/api.js', 'js/store.js', 'js/period.js',
