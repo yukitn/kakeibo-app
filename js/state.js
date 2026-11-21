@@ -7,25 +7,45 @@ import { cachePut, cacheGet } from './queue.js';
 let boot = null;
 let offline = false;
 
-export function resetBoot() { boot = null; offline = false; }
+let gen = 0;   // ロックのたびに増やし、古い応答が解除後/ロック中に反映されないようにする
+export function resetBoot() { boot = null; offline = false; gen++; }
 export function getBoot() { return boot; }
 export function isOffline() { return offline; }
 
+let refreshing = null;
+
+async function fetchBoot(key) {
+  const g = gen;
+  try {
+    const fresh = await call('bootstrap', {}, { user_id: currentUserId() });
+    if (g !== gen) return boot;          // 取得中にロックされた: 反映しない
+    boot = fresh;
+    offline = false;
+    if (key) cachePut(key, fresh).catch(() => {});
+    return boot;
+  } catch (e) {
+    if (e && e.code === 'NETWORK') offline = true;
+    throw e;
+  }
+}
+
+/**
+ * マスタ(カテゴリ・支払い方法・タグ等)を返す。端末内に前回の分があればそれを即座に返し、裏で最新化する
+ * （通信待ちなしで画面を出すため）。前回分が無い初回だけ通信を待つ。
+ */
 export async function ensureBoot(force = false) {
   if (boot && !force) return boot;
   const p = activeProfile();
-  try {
-    boot = await call('bootstrap', {}, { user_id: currentUserId() });
-    offline = false;
-    if (p) cachePut('boot:' + p.id, boot).catch(() => {});
-    return boot;
-  } catch (e) {
-    if (e && e.code === 'NETWORK' && p) {
-      const cached = await cacheGet('boot:' + p.id).catch(() => null);
-      if (cached) { boot = cached; offline = true; return boot; }
+  const key = p ? 'boot:' + p.id : null;
+  if (key && !force) {
+    const cached = await cacheGet(key).catch(() => null);
+    if (cached) {
+      boot = cached;
+      if (!refreshing) refreshing = fetchBoot(key).catch(() => {}).finally(() => { refreshing = null; });
+      return boot;
     }
-    throw e;
   }
+  return fetchBoot(key);
 }
 
 export function currentUserId() {

@@ -3,8 +3,10 @@ import { call } from './api.js';
 import { getPeriod, shiftPeriod, periodOfKey, today } from './period.js';
 import { h, chip, errText, openSheet, toast, yen, dateLabel, fill } from './ui.js';
 import { openEntry } from './entry.js';
-import { alerts } from './budget-calc.js';
-import { pending, removeItem, syncOutbox } from './queue.js';
+import { alerts, resolveBudget, level, spentMaps } from './budget-calc.js';
+import { bar, remainText } from './budget.js';
+import { ring } from './charts.js';
+import { pending, removeItem, syncOutbox, cacheGet, cachePut } from './queue.js';
 import { activeProfile } from './store.js';
 import * as S from './state.js';
 
@@ -92,63 +94,98 @@ async function pendingCard(body) {
 }
 
 /* ---------- ホーム ---------- */
+const goTab = (id) => document.dispatchEvent(new CustomEvent('goto-tab', { detail: id }));
+
+/**
+ * ホーム: 1回の通信(dashboard)で全部取得する。前回取得した内容が端末にあれば先に表示し、届き次第、最新に差し替える
+ * （GAS の応答待ちで真っ白な時間を作らない）。
+ */
 export async function paintHome(body) {
   fill(body, h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
   const pendCard = await pendingCard(body);
+  const prof = activeProfile();
+  let period;
   try {
     await S.ensureBoot();
-    const period = getPeriod(today(), S.startDay());
-    const { items } = await call('tx.list', { from: period.from, to: period.to, limit: 1000 }, { user_id: S.currentUserId() });
-    const income = sum(items, 'income'), expense = sum(items, 'expense');
-
-    // 支出の大カテゴリ別内訳（上位）
-    const byCat = new Map();
-    items.filter((t) => t.type === 'expense').forEach((t) => {
-      const c = S.catById(t.category_id);
-      const top = c && c.parent_id ? S.catById(c.parent_id) : c;
-      const key = top?.id || 'x';
-      byCat.set(key, { name: top?.name || '不明', icon: top?.icon || '', amt: (byCat.get(key)?.amt || 0) + Number(t.amount) });
-    });
-    const top = [...byCat.values()].sort((a, b) => b.amt - a.amt).slice(0, 5);
-    const max = top[0]?.amt || 1;
-
-    // 予算アラート（大カテゴリ単位のみ）。取得に失敗してもホームは表示する
-    let alertCard = null;
-    try {
-      const { items: budgets } = await call('budget.list', {}, { user_id: S.currentUserId() });
-      const spentTop = new Map();
-      items.filter((t) => t.type === 'expense').forEach((t) => spentTop.set(t.category_id, (spentTop.get(t.category_id) || 0) + Number(t.amount)));
-      const al = alerts(S.topCategories('expense'), budgets, spentTop, period.key);
-      if (al.length) {
-        alertCard = h('div', { class: 'card alert', role: 'status' }, al.map((a) =>
-          h('p', {}, (a.level === 'over' ? '⚠️ ' : '🔔 ') + `${a.category.name}：` +
-            (a.level === 'over' ? `予算を ${yen(a.used - a.budget)} 超えています` : `予算の ${Math.round((a.used / a.budget) * 100)}% に達しました`))));
-      }
-    } catch { /* 予算が取れなくても他の表示を優先 */ }
-
-    fill(body, 
-      h('h2', {}, 'ホーム'),
-      h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`),
-      pendCard,
-      alertCard,
-      h('div', { class: 'summary' },
-        h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収入'), h('strong', { class: 'income' }, yen(income))),
-        h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '支出'), h('strong', { class: 'expense' }, yen(expense))),
-        h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収支'), h('strong', { class: income - expense >= 0 ? 'income' : 'expense' }, (income - expense < 0 ? '−' : '') + yen(Math.abs(income - expense))))),
-      h('div', { class: 'card' }, h('h3', {}, '支出の内訳'),
-        top.length ? top.map((c) => h('div', { class: 'bar-row' },
-          h('span', { class: 'bar-label' }, `${c.icon} ${c.name}`),
-          h('span', { class: 'bar' }, h('span', { class: 'bar-fill', style: `width:${Math.max(4, Math.round((c.amt / max) * 100))}%` })),
-          h('span', { class: 'bar-val' }, yen(c.amt)))) : h('p', { class: 'muted' }, 'まだ支出がありません。右下の ＋ から入力できます。')),
-      h('div', { class: 'card' }, h('h3', {}, '最近の入力'),
-        items.length ? h('div', { class: 'tx-list' }, items.slice(0, 5).map((t) => txRow(t, (x) => openDetail(x, () => paintHome(body)))))
-          : h('p', { class: 'muted' }, 'まだ入力がありません。'))
-    );
+    period = getPeriod(today(), S.startDay());
   } catch (e) {
-    fill(body, h('h2', {}, 'ホーム'), pendCard,
-      h('p', { class: e.code === 'NETWORK' ? 'muted' : 'msg' }, e.code === 'NETWORK' ? 'オフラインのため、集計を表示できません。入力は保存でき、接続後に送信されます。' : errText(e)));
+    fill(body, h('h2', {}, 'ホーム'), pendCard, offlineOrError(e));
+    return;
+  }
+  const key = `dash:${prof.id}:${period.key}`;
+  const cached = await cacheGet(key).catch(() => null);
+  if (cached) renderHome(body, cached, period, pendCard, '更新中…');
+  try {
+    const d = await call('dashboard', { from: period.from, to: period.to }, { user_id: S.currentUserId() });
+    cachePut(key, d).catch(() => {});
+    renderHome(body, d, period, pendCard, '');
+  } catch (e) {
+    if (cached) renderHome(body, cached, period, pendCard, e.code === 'NETWORK' ? 'オフラインのため、最後に取得した内容を表示しています' : errText(e));
+    else fill(body, h('h2', {}, 'ホーム'), pendCard, offlineOrError(e));
   }
 }
+
+const offlineOrError = (e) => h('p', { class: e.code === 'NETWORK' ? 'muted' : 'msg' },
+  e.code === 'NETWORK' ? 'オフラインのため、集計を表示できません。入力は保存でき、接続後に送信されます。' : errText(e));
+
+function renderHome(body, d, period, pendCard, note) {
+  const { income, expense } = d.totals;
+  const { top: spentTop } = spentMaps(d.by_category);
+  const tops = S.topCategories('expense');
+
+  // 支出の大カテゴリ別内訳（上位5）
+  const topRows = tops.map((c) => ({ name: c.name, icon: c.icon || '', amt: spentTop.get(c.id) || 0 })).filter((r) => r.amt > 0).sort((a, b) => b.amt - a.amt).slice(0, 5);
+  const max = topRows[0]?.amt || 1;
+
+  // 予算の進捗: 予算のある大カテゴリを、使用率の高い順に
+  const rows = tops.map((c) => ({ c, b: resolveBudget(d.budgets, c.id, period.key), used: spentTop.get(c.id) || 0 }))
+    .filter((r) => r.b).sort((x, y) => y.used / y.b.amount - x.used / x.b.amount);
+  const totalBudget = rows.reduce((a, r) => a + r.b.amount, 0);
+  const totalUsed = rows.reduce((a, r) => a + r.used, 0);
+  const pct = goalPctSafe(totalUsed, totalBudget);
+  const lv = level(totalUsed, totalBudget);
+  const al = alerts(tops, d.budgets, spentTop, period.key);
+
+  const budgetCard = rows.length
+    ? h('div', { class: 'card' },
+      h('div', { class: 'row tight' }, h('h3', {}, '今月の予算'), h('button', { type: 'button', class: 'btn small ghost', onclick: () => goTab('budget') }, 'くわしく ›')),
+      h('div', { class: 'budget-hero' },
+        ring(pct, { size: 96, label: '予算の使用率', tone: lv }),
+        h('div', { class: 'budget-hero-text' },
+          h('div', { class: 'goal-amt' }, `${yen(totalUsed)} / ${yen(totalBudget)}`),
+          h('div', { class: 'small-text ' + (lv === 'over' ? 'expense' : 'muted') }, remainText(totalUsed, totalBudget)))),
+      rows.slice(0, 6).map(({ c, b, used }) => h('div', { class: 'home-bud' },
+        h('div', { class: 'row tight' }, h('span', {}, `${c.icon || ''} ${c.name}`), h('span', { class: 'bud-amt' }, `${yen(used)} / ${yen(b.amount)}`)),
+        bar(used, b.amount))),
+      rows.length > 6 && h('p', { class: 'note' }, `ほか ${rows.length - 6} 件は「予算」画面で見られます`))
+    : h('div', { class: 'card' }, h('h3', {}, '今月の予算'),
+      h('p', { class: 'muted' }, 'まだ予算が設定されていません。カテゴリごとに月の予算を決めると、ここで使いすぎを一目で確認できます。'),
+      h('button', { type: 'button', class: 'btn small primary', onclick: () => goTab('budget') }, '予算を設定する'));
+
+  fill(body,
+    h('h2', {}, 'ホーム'),
+    h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`, note && h('span', { class: 'stale-note' }, '　' + note)),
+    pendCard,
+    al.length > 0 && h('div', { class: 'card alert', role: 'status' }, al.map((a) =>
+      h('p', {}, (a.level === 'over' ? '⚠️ ' : '🔔 ') + `${a.category.name}：` +
+        (a.level === 'over' ? `予算を ${yen(a.used - a.budget)} 超えています` : `予算の ${Math.round((a.used / a.budget) * 100)}% に達しました`)))),
+    h('div', { class: 'summary' },
+      h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収入'), h('strong', { class: 'income' }, yen(income))),
+      h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '支出'), h('strong', { class: 'expense' }, yen(expense))),
+      h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収支'), h('strong', { class: income - expense >= 0 ? 'income' : 'expense' }, (income - expense < 0 ? '−' : '') + yen(Math.abs(income - expense))))),
+    budgetCard,
+    h('div', { class: 'grid2' },
+      h('div', { class: 'card' }, h('h3', {}, '支出の内訳'),
+        topRows.length ? topRows.map((c) => h('div', { class: 'bar-row' },
+          h('span', { class: 'bar-label' }, `${c.icon} ${c.name}`),
+          h('span', { class: 'bar' }, h('span', { class: 'bar-fill', style: `width:${Math.max(4, Math.round((c.amt / max) * 100))}%` })),
+          h('span', { class: 'bar-val' }, yen(c.amt)))) : h('p', { class: 'muted' }, 'まだ支出がありません。右下の「＋ 入力」から入力できます。')),
+      h('div', { class: 'card' }, h('h3', {}, '最近の入力'),
+        d.recent.length ? h('div', { class: 'tx-list' }, d.recent.map((t) => txRow(t, (x) => openDetail(x, () => paintHome(body)))))
+          : h('p', { class: 'muted' }, 'まだ入力がありません。'))));
+}
+
+const goalPctSafe = (used, budget) => (budget > 0 ? Math.round((used / budget) * 100) : 0);
 
 /* ---------- 履歴 ---------- */
 const hist = { key: null, keyword: '', type: '', category: '', tag: '' };

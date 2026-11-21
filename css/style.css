@@ -335,3 +335,13 @@ textarea:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 /* タブが8つ: ラベルをさらに小さく、アイコンは据え置き */
 .nav-item { font-size: .62rem; letter-spacing: -.02em; }
 @media (min-width: 900px) and (orientation: landscape) { .nav-item { font-size: .78rem; letter-spacing: 0; } }
+
+/* ================= 改善: ホームの予算グラフ・表示の整理 ================= */
+.budget-hero { display: flex; align-items: center; gap: 16px; margin: 6px 0 12px; }
+.budget-hero-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-bud { margin: 10px 0; }
+.home-bud .pbar { margin: 4px 0 0; }
+.ring-fg.warn { stroke: var(--caution); }
+.ring-fg.over { stroke: var(--warn); }
+.stale-note { font-size: .8rem; color: var(--muted); }
+.lead { line-height: 1.7; }

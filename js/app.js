@@ -25,11 +25,11 @@ function route() {
   return viewMain(lastTab);
 }
 
-/* ---------- セットアップ（新規プロファイル登録 / 合言葉更新） ---------- */
+/* ---------- セットアップ（家計簿の登録 / 合言葉更新） ---------- */
 function viewSetup({ first = false, updateProfile = null } = {}) {
   const isUpdate = !!updateProfile;
   const msg = h('p', { class: 'msg', role: 'alert' });
-  const name = h('input', { type: 'text', name: 'username', autocomplete: 'username', maxlength: 30, value: updateProfile?.name || '', placeholder: '例: わが家' });
+  const name = h('input', { type: 'text', name: 'username', autocomplete: 'username', maxlength: 30, value: updateProfile?.name || '', placeholder: '例: わが家の家計簿' });
   const url = h('input', { type: 'url', inputmode: 'url', autocomplete: 'off', placeholder: 'https://script.google.com/macros/s/…/exec', value: updateProfile?.url || '' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'new-password', minlength: auth.MIN_LENGTH, placeholder: `${auth.MIN_LENGTH}文字以上の英数字` });
   const user = h('input', { type: 'text', autocomplete: 'off', maxlength: 20, placeholder: '例: ゆうき（あとで変更できます）' });
@@ -69,7 +69,7 @@ function viewSetup({ first = false, updateProfile = null } = {}) {
       }
     }
   },
-    field('プロファイル名', name),
+    field('家計簿の名前', name, 'この端末で見分けるための名前です。あとから変えられます'),
     field('GAS の Web アプリ URL', url, 'スプレッドシートの Apps Script をデプロイして発行された URL'),
     field('合言葉', pass, 'GAS のスクリプトプロパティ API_TOKEN と同じもの。パスワード管理アプリの自動入力が使えます'),
     !isUpdate && field('あなたの表示名（初回のみ）', user),
@@ -106,8 +106,8 @@ function viewLock(profile) {
   },
     // パスワード管理アプリが保存/補完できるよう、ユーザー名欄を同梱
     h('input', { type: 'text', name: 'username', autocomplete: 'username', value: profile.name, class: 'sr-only', tabindex: -1, 'aria-hidden': 'true', readonly: true }),
-    field(profile.name, pass), msg, btn,
-    store.profiles.length > 1 && h('button', { class: 'btn ghost', type: 'button', onclick: () => switchMenu() }, 'プロファイルを切り替える')
+    field('合言葉', pass), msg, btn,
+    store.profiles.length > 1 && h('button', { class: 'btn ghost', type: 'button', onclick: () => switchMenu() }, '別の家計簿に切り替える')
   );
 
   const switchMenu = () => {
@@ -116,7 +116,7 @@ function viewLock(profile) {
     render(h('main', { class: 'center' }, h('h1', { class: 'logo' }, '🌿 家計簿'), list));
   };
 
-  render(h('main', { class: 'center' }, h('h1', { class: 'logo' }, '🌿 家計簿'), h('p', { class: 'lead' }, 'ロック中'), form));
+  render(h('main', { class: 'center' }, h('h1', { class: 'logo' }, '🌿 家計簿'), h('p', { class: 'lead' }, `「${profile.name}」を開きます`, h('br'), '合言葉を入力してください'), form));
   pass.focus();
 }
 
@@ -205,14 +205,14 @@ function paintSettings(body) {
     } catch (e) { exportStatus.textContent = errText(e); }
   }
 
-  const profiles = h('div', { class: 'card' }, h('h3', {}, 'プロファイル（接続先）'),
+  const profiles = h('div', { class: 'card' }, h('h3', {}, 'つないでいる家計簿'),
     s.profiles.map((x) =>
       h('div', { class: 'row' },
         h('span', {}, (x.id === s.activeId ? '● ' : '○ ') + x.name),
         x.id !== s.activeId && h('button', { class: 'btn small', type: 'button', onclick: () => { s.activeId = x.id; save(); auth.lock(); } }, '切替')
       )),
     h('div', { class: 'row' },
-      h('button', { class: 'btn small', type: 'button', onclick: () => viewSetup({}) }, '＋ 接続先を追加'),
+      h('button', { class: 'btn small', type: 'button', onclick: () => viewSetup({}) }, '＋ 別の家計簿をつなぐ'),
       h('button', { class: 'btn small', type: 'button', onclick: () => viewSetup({ updateProfile: p }) }, '合言葉を更新')));
 
   const test = h('button', { class: 'btn small', type: 'button', onclick: async () => {
@@ -260,6 +260,7 @@ auth.onLock(() => {
 });
 auth.startIdleLock();
 route();
+document.addEventListener('goto-tab', (e) => { if (auth.isUnlocked()) viewMain(e.detail); });
 
 // オフライン表示と、復帰時の自動送信
 const netbar = h('div', { class: 'offline-bar', role: 'status', hidden: true }, 'オフラインです。入力は端末に保存され、接続後に自動で送信されます');
@@ -270,5 +271,12 @@ window.addEventListener('offline', paintNet);
 paintNet();
 
 if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  // 新しいバージョンに切り替わった: 入力中に勝手に再読み込みしない（ロック中だけ即反映、操作中は次回起動で反映）
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (!auth.isUnlocked()) location.reload();
+    else toast('アプリを更新しました。次に開いたときから新しくなります');
+  });
 }

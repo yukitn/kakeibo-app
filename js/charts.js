@@ -120,13 +120,13 @@ export function lineChart(points, { label = '推移', fmt = (v) => String(v), to
 }
 
 /** リングゲージ（達成率）。pct は 0〜100 を超えてもよい（描画は100で頭打ち） */
-export function ring(pct, { size = 84, label = '達成率', done = false } = {}) {
+export function ring(pct, { size = 84, label = '達成率', done = false, tone = '' } = {}) {
   const r = 34, C = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(100, pct));
   const root = svg('svg', { viewBox: '0 0 84 84', width: size, height: size, class: 'chart ring', role: 'img', 'aria-label': `${label} ${pct}%`, style: `width:${size}px;height:${size}px` });
   root.append(
     svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, class: 'ring-bg' }),
-    svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, 'stroke-linecap': 'round', class: 'ring-fg' + (done ? ' done' : ''),
+    svg('circle', { cx: 42, cy: 42, r, fill: 'none', 'stroke-width': 9, 'stroke-linecap': 'round', class: 'ring-fg' + (done ? ' done' : '') + (tone ? ' ' + tone : ''),
       'stroke-dasharray': `${(p / 100) * C} ${C}`, transform: 'rotate(-90 42 42)' }),
     svg('text', { x: 42, y: 47, 'text-anchor': 'middle', class: 'ring-text' }, `${pct}%`));
   return root;

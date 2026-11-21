@@ -9,7 +9,7 @@ import * as S from './state.js';
 const st = { key: null };
 const SRC_LABEL = { month: 'この月だけ', year: 'この年', default: '' };
 
-function bar(used, budget, { sub = false } = {}) {
+export function bar(used, budget, { sub = false } = {}) {
   let lv = level(used, budget);
   if (sub && lv === 'warn') lv = 'ok';                 // サブ単位は強い警告を出さない
   const cls = sub && lv === 'over' ? 'caution' : lv;   // サブの超過は注意色止まり
@@ -18,7 +18,7 @@ function bar(used, budget, { sub = false } = {}) {
   h('span', { class: 'pbar-fill', style: `width:${ratioPct(used, budget)}%` }));
 }
 
-function remainText(used, budget) {
+export function remainText(used, budget) {
   const r = budget - used;
   return r >= 0 ? `残り ${yen(r)}` : `${yen(-r)} オーバー`;
 }
