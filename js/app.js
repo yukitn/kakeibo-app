@@ -5,6 +5,8 @@ import { h, field, errText, closeAllSheets } from './ui.js';
 import * as S from './state.js';
 import { paintHome, paintHistory } from './history.js';
 import { openEntry } from './entry.js';
+import { paintBudget } from './budget.js';
+import { paintStats } from './stats.js';
 
 const root = document.getElementById('app');
 const render = (...nodes) => root.replaceChildren(...nodes);
@@ -116,8 +118,10 @@ function viewLock(profile) {
 const TABS = [
   { id: 'home', label: 'ホーム', icon: '🏠' },
   { id: 'history', label: '履歴', icon: '📒' },
+  { id: 'budget', label: '予算', icon: '🎯' },
+  { id: 'stats', label: '統計', icon: '📊' },
   { id: 'settings', label: '設定', icon: '⚙️' }
-  // M3 以降: 統計 / 予算 / 資産 / 目標 / メモ
+  // M4 以降: 資産 / 目標 / メモ
 ];
 let lastTab = 'home';
 
@@ -142,6 +146,8 @@ function viewMain(tab) {
 function paintTab(tab, body) {
   if (tab === 'settings') return paintSettings(body);
   if (tab === 'history') return paintHistory(body);
+  if (tab === 'budget') return paintBudget(body);
+  if (tab === 'stats') return paintStats(body);
   return paintHome(body);
 }
 

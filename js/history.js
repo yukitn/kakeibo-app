@@ -3,6 +3,7 @@ import { call } from './api.js';
 import { getPeriod, shiftPeriod, periodOfKey, today } from './period.js';
 import { h, chip, errText, openSheet, toast, yen, dateLabel } from './ui.js';
 import { openEntry } from './entry.js';
+import { alerts } from './budget-calc.js';
 import * as S from './state.js';
 
 const sum = (items, type) => items.filter((t) => t.type === type).reduce((a, t) => a + Number(t.amount), 0);
@@ -86,9 +87,24 @@ export async function paintHome(body) {
     const top = [...byCat.values()].sort((a, b) => b.amt - a.amt).slice(0, 5);
     const max = top[0]?.amt || 1;
 
+    // 予算アラート（大カテゴリ単位のみ）。取得に失敗してもホームは表示する
+    let alertCard = null;
+    try {
+      const { items: budgets } = await call('budget.list', {}, { user_id: S.currentUserId() });
+      const spentTop = new Map();
+      items.filter((t) => t.type === 'expense').forEach((t) => spentTop.set(t.category_id, (spentTop.get(t.category_id) || 0) + Number(t.amount)));
+      const al = alerts(S.topCategories('expense'), budgets, spentTop, period.key);
+      if (al.length) {
+        alertCard = h('div', { class: 'card alert', role: 'status' }, al.map((a) =>
+          h('p', {}, (a.level === 'over' ? '⚠️ ' : '🔔 ') + `${a.category.name}：` +
+            (a.level === 'over' ? `予算を ${yen(a.used - a.budget)} 超えています` : `予算の ${Math.round((a.used / a.budget) * 100)}% に達しました`))));
+      }
+    } catch { /* 予算が取れなくても他の表示を優先 */ }
+
     body.replaceChildren(
       h('h2', {}, 'ホーム'),
       h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`),
+      alertCard,
       h('div', { class: 'summary' },
         h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収入'), h('strong', { class: 'income' }, yen(income))),
         h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '支出'), h('strong', { class: 'expense' }, yen(expense))),
