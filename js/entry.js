@@ -1,6 +1,7 @@
 // 収支入力シート（新規/編集）。電卓テンキー＋ワンタップチップ中心。
 import { call } from './api.js';
-import { load, save } from './store.js';
+import { load, save, activeProfile } from './store.js';
+import { enqueue } from './queue.js';
 import { today, shiftDay } from './period.js';
 import { h, chip, field, errText, openSheet, toast, yen, fill } from './ui.js';
 import { createKeypad, evaluate } from './keypad.js';
@@ -26,6 +27,7 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
     memo: tx?.memo || '',
     receipt: tx?.receipt_file_id ? { file_id: tx.receipt_file_id, url: tx.receipt_url } : null,
     newImage: null,   // data URL（未アップロード）
+    txId: tx ? null : crypto.randomUUID(),   // 新規入力のID（クライアント発行。オフライン再送の二重登録防止）
     keepGoing: false,
     saving: false
   };
@@ -145,6 +147,32 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
 
   function paintAll() { paintType(); paintAmount(); paintCats(); paintAccounts(); paintTags(); paintDate(); paintImage(); }
 
+  function buildPayload(amount, receipt) {
+    return {
+      type: st.type, amount, date: st.date,
+      category_id: st.categoryId, subcategory_id: st.subId, account_id: st.accountId,
+      tags: st.tags, memo: st.memo,
+      receipt_url: receipt ? receipt.url : '', receipt_file_id: receipt ? receipt.file_id : '',
+      user_id: tx?.user_id || S.currentUserId()
+    };
+  }
+
+  /** 保存（または保存待ち登録）が済んだ後の共通処理 */
+  function finishSaved(message) {
+    const sv = load();
+    sv.lastAccount = { ...(sv.lastAccount || {}), [sv.activeId]: st.accountId };
+    save();
+    toast(message);
+    onSaved();
+    if (st.keepGoing && !tx) {
+      st.expr = ''; st.memo = ''; st.tags = []; st.newImage = null; st.receipt = null;
+      st.txId = crypto.randomUUID();       // 次の入力は別のID
+      memo.value = '';
+      keypad.set('');
+      paintAll();
+    } else close();
+  }
+
   async function doSave() {
     if (st.saving) return;
     msg.textContent = '';
@@ -153,36 +181,29 @@ export function openEntry({ tx = null, onSaved = () => {} } = {}) {
     if (!st.categoryId) { msg.textContent = 'カテゴリを選んでください'; return; }
     if (!st.accountId) { msg.textContent = st.type === 'expense' ? '支払い方法を選んでください' : '入金先を選んでください'; return; }
     st.saving = true; saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+    const client = { user_id: S.currentUserId() };
+    let receipt = st.receipt;
     try {
-      const client = { user_id: S.currentUserId() };
-      let receipt = st.receipt;
       if (st.newImage) {
         saveBtn.textContent = '画像を保存中…';
         receipt = await call('image.upload', { data_base64: stripDataUrl(st.newImage) }, client);
+        st.receipt = receipt; st.newImage = null;     // アップロード済み（再試行しても画像を二重に上げない）
       }
-      const payload = {
-        type: st.type, amount, date: st.date,
-        category_id: st.categoryId, subcategory_id: st.subId, account_id: st.accountId,
-        tags: st.tags, memo: st.memo,
-        receipt_url: receipt ? receipt.url : '', receipt_file_id: receipt ? receipt.file_id : '',
-        user_id: tx?.user_id || S.currentUserId()
-      };
+      const payload = buildPayload(amount, receipt);
       if (tx) await call('tx.update', { ...payload, id: tx.id, updated_at: tx.updated_at }, client);
-      else await call('tx.create', payload, client);
-
-      const sv = load();
-      sv.lastAccount = { ...(sv.lastAccount || {}), [sv.activeId]: st.accountId };
-      save();
-      toast(tx ? '更新しました' : `${yen(amount)} を保存しました`);
-      onSaved();
-      if (st.keepGoing && !tx) {
-        st.expr = ''; st.memo = ''; st.tags = []; st.newImage = null; st.receipt = null;
-        memo.value = '';
-        keypad.set('');
-        paintAll();
-      } else close();
+      else await call('tx.create', { ...payload, id: st.txId }, client);   // IDはこちらで発行＝再送しても二重登録されない
+      finishSaved(tx ? '更新しました' : `${yen(amount)} を保存しました`);
     } catch (e) {
-      msg.textContent = e.code === 'CONFLICT' ? '他の端末で更新されています。閉じて開き直してください' : errText(e);
+      if (e.code === 'NETWORK' && !tx) {
+        // 通信できない: 端末内に保存し、接続後に自動送信する（新規入力のみ。編集は競合を避けるためオンライン必須）
+        try {
+          await enqueue(activeProfile().id, { txId: st.txId, payload: buildPayload(amount, st.receipt), image: st.newImage, client });
+          finishSaved('通信できないため端末に保存しました。接続後に自動で送信します');
+          return;
+        } catch { msg.textContent = '保存できませんでした。通信状況を確認してください'; }
+      } else {
+        msg.textContent = e.code === 'CONFLICT' ? '他の端末で更新されています。閉じて開き直してください' : errText(e);
+      }
     } finally {
       st.saving = false; saveBtn.disabled = false; saveBtn.textContent = tx ? '更新する' : '保存する';
     }

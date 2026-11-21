@@ -1,16 +1,31 @@
 // アプリ共有状態（bootstrap マスタ）。ロック時に破棄する。
-import { load } from './store.js';
+// 通信できないときは、端末内にキャッシュした直近のマスタで入力・閲覧を続けられる（オフライン）。
+import { load, activeProfile } from './store.js';
 import { call } from './api.js';
+import { cachePut, cacheGet } from './queue.js';
 
 let boot = null;
+let offline = false;
 
-export function resetBoot() { boot = null; }
+export function resetBoot() { boot = null; offline = false; }
 export function getBoot() { return boot; }
+export function isOffline() { return offline; }
 
 export async function ensureBoot(force = false) {
   if (boot && !force) return boot;
-  boot = await call('bootstrap', {}, { user_id: currentUserId() });
-  return boot;
+  const p = activeProfile();
+  try {
+    boot = await call('bootstrap', {}, { user_id: currentUserId() });
+    offline = false;
+    if (p) cachePut('boot:' + p.id, boot).catch(() => {});
+    return boot;
+  } catch (e) {
+    if (e && e.code === 'NETWORK' && p) {
+      const cached = await cacheGet('boot:' + p.id).catch(() => null);
+      if (cached) { boot = cached; offline = true; return boot; }
+    }
+    throw e;
+  }
 }
 
 export function currentUserId() {

@@ -1,7 +1,7 @@
 import { load, save, activeProfile } from './store.js';
 import * as auth from './auth.js';
 import { call, callWith } from './api.js';
-import { h, field, errText, closeAllSheets, fill } from './ui.js';
+import { h, field, errText, closeAllSheets, fill, toast } from './ui.js';
 import * as S from './state.js';
 import { paintHome, paintHistory } from './history.js';
 import { openEntry } from './entry.js';
@@ -9,6 +9,10 @@ import { paintBudget } from './budget.js';
 import { paintStats } from './stats.js';
 import { paintAssets } from './assets.js';
 import { paintGoals } from './goals.js';
+import { paintMemo } from './memo.js';
+import { syncOutbox } from './queue.js';
+import { transactionsCsv, assetsCsv, download } from './csv.js';
+import { today } from './period.js';
 
 const root = document.getElementById('app');
 const render = (...nodes) => fill(root, ...nodes);
@@ -124,27 +128,52 @@ const TABS = [
   { id: 'stats', label: '統計', icon: '📊' },
   { id: 'assets', label: '資産', icon: '💰' },
   { id: 'goals', label: '目標', icon: '🌱' },
+  { id: 'memo', label: 'メモ', icon: '🗒️' },
   { id: 'settings', label: '設定', icon: '⚙️' }
-  // M5: メモ
 ];
 let lastTab = 'home';
+
+let currentRefresh = () => {};
+let entered = false;   // ロック解除後の初回表示で、未送信の送信やショートカット処理を1回だけ行う
 
 function viewMain(tab) {
   lastTab = tab;
   const body = h('div', { class: 'content' });
   const refresh = () => paintTab(tab, body);
+  currentRefresh = refresh;
   const nav = h('nav', { class: 'nav', 'aria-label': 'メイン' }, TABS.map((t) =>
     h('button', { class: 'nav-item' + (t.id === tab ? ' active' : ''), type: 'button', 'aria-current': t.id === tab ? 'page' : false, onclick: () => viewMain(t.id) },
       h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, t.icon), h('span', {}, t.label))));
-  const fab = !['settings', 'assets', 'goals'].includes(tab) && h('button', {
+  const fab = !['settings', 'assets', 'goals', 'memo'].includes(tab) && h('button', {
     class: 'fab', type: 'button', 'aria-label': '収支を入力',
     onclick: async () => {
-      try { await S.ensureBoot(); } catch (e) { return; }
+      try { await S.ensureBoot(); } catch (e) { toast(errText(e)); return; }
       openEntry({ onSaved: refresh });
     }
   }, h('span', { class: 'fab-plus', 'aria-hidden': 'true' }, '＋'), h('span', {}, '入力'));
   render(h('div', { class: 'shell' }, nav, h('main', { class: 'main' }, body), fab));
   refresh();
+  if (!entered) { entered = true; onEnter(); }
+}
+
+/** 未送信の入力を送信（通信できるとき）。送信できたら表示を更新 */
+async function runSync() {
+  if (!auth.isUnlocked()) return;
+  try {
+    const r = await syncOutbox();
+    if (r.sent) { toast(`保存待ちの ${r.sent} 件を送信しました`); currentRefresh(); }
+    else if (r.failed) currentRefresh();
+  } catch { /* 次回の機会に再試行 */ }
+}
+
+async function onEnter() {
+  runSync();
+  // ホーム画面のショートカット（?new=1）から開いたときは、そのまま入力画面を開く
+  const params = new URLSearchParams(location.search);
+  if (params.get('new') === '1') {
+    history.replaceState(null, '', location.pathname);
+    try { await S.ensureBoot(); openEntry({ onSaved: currentRefresh }); } catch (e) { toast(errText(e)); }
+  }
 }
 
 function paintTab(tab, body) {
@@ -154,6 +183,7 @@ function paintTab(tab, body) {
   if (tab === 'stats') return paintStats(body);
   if (tab === 'assets') return paintAssets(body);
   if (tab === 'goals') return paintGoals(body);
+  if (tab === 'memo') return paintMemo(body);
   return paintHome(body);
 }
 
@@ -162,6 +192,18 @@ function paintSettings(body) {
   const s = load();
   const p = activeProfile();
   const status = h('p', { class: 'muted', role: 'status' });
+  const exportStatus = h('p', { class: 'muted small-text', role: 'status' });
+  async function exportData(kind) {
+    exportStatus.textContent = '書き出し中…';
+    try {
+      const data = await call('data.export', {}, { user_id: S.currentUserId() });
+      const stamp = today().replace(/-/g, '');
+      if (kind === 'tx') download(`kakeibo-収支-${stamp}.csv`, transactionsCsv(data));
+      else if (kind === 'asset') download(`kakeibo-資産-${stamp}.csv`, assetsCsv(data));
+      else download(`kakeibo-全データ-${stamp}.json`, JSON.stringify(data, null, 2), 'application/json');
+      exportStatus.textContent = `保存しました（収支 ${data.Transactions.length} 件）`;
+    } catch (e) { exportStatus.textContent = errText(e); }
+  }
 
   const profiles = h('div', { class: 'card' }, h('h3', {}, 'プロファイル（接続先）'),
     s.profiles.map((x) =>
@@ -196,6 +238,14 @@ function paintSettings(body) {
       field('無操作で自動ロックするまで', mins),
       h('button', { class: 'btn small', type: 'button', onclick: () => auth.lock() }, '今すぐロック')),
     h('div', { class: 'card' }, h('h3', {}, 'この端末の入力者'), field('既定のユーザー', userSel, '端末ごとに保存されます')),
+    h('div', { class: 'card' }, h('h3', {}, 'バックアップ（書き出し）'),
+      h('p', { class: 'muted small-text' }, 'データは常にあなたのスプレッドシートにあります。ここでは Excel などで開ける CSV を保存できます。'),
+      h('div', { class: 'row-left' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => exportData('tx') }, '収支をCSVで保存'),
+        h('button', { class: 'btn small', type: 'button', onclick: () => exportData('asset') }, '資産の残高をCSVで保存'),
+        h('button', { class: 'btn small', type: 'button', onclick: () => exportData('json') }, '全データ(JSON)')),
+      exportStatus,
+      h('p', { class: 'muted small-text' }, '週1回の自動バックアップ（スプレッドシートのコピー）は、導入ガイドの手順で設定できます。')),
     h('div', { class: 'card' }, h('h3', {}, 'データについて'),
       h('p', { class: 'muted' }, 'データはあなたのGoogleスプレッドシートに保存されます。この端末には接続先URLと合言葉の検証用ハッシュのみ保存し、合言葉そのものは保存しません。'))
   );
@@ -203,12 +253,21 @@ function paintSettings(body) {
 
 /* ---------- 起動 ---------- */
 auth.onLock(() => {
+  entered = false;
   S.resetBoot();
   closeAllSheets();   // 入力途中のシート・領収書表示を確実に閉じる
   route();
 });
 auth.startIdleLock();
 route();
+
+// オフライン表示と、復帰時の自動送信
+const netbar = h('div', { class: 'offline-bar', role: 'status', hidden: true }, 'オフラインです。入力は端末に保存され、接続後に自動で送信されます');
+document.body.append(netbar);
+const paintNet = () => { netbar.hidden = navigator.onLine; };
+window.addEventListener('online', () => { paintNet(); runSync(); });
+window.addEventListener('offline', paintNet);
+paintNet();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

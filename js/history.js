@@ -4,6 +4,8 @@ import { getPeriod, shiftPeriod, periodOfKey, today } from './period.js';
 import { h, chip, errText, openSheet, toast, yen, dateLabel, fill } from './ui.js';
 import { openEntry } from './entry.js';
 import { alerts } from './budget-calc.js';
+import { pending, removeItem, syncOutbox } from './queue.js';
+import { activeProfile } from './store.js';
 import * as S from './state.js';
 
 const sum = (items, type) => items.filter((t) => t.type === type).reduce((a, t) => a + Number(t.amount), 0);
@@ -67,9 +69,32 @@ export function openDetail(t, onChanged) {
   }
 }
 
+/** 端末に保存済みの未送信入力のカード。無ければ null */
+async function pendingCard(body) {
+  try {
+    const p = activeProfile();
+    const q = p ? await pending(p.id) : [];
+    if (!q.length) return null;
+    const run = async () => {
+      const r = await syncOutbox();
+      toast(r.sent ? `${r.sent} 件を送信しました` : r.offline ? 'まだ通信できません' : '送信できなかった入力があります');
+      paintHome(body);
+    };
+    return h('div', { class: 'card pending', role: 'status' },
+      h('h3', {}, `📤 未送信の入力 ${q.length} 件`),
+      h('p', { class: 'muted small-text' }, '通信できなかった入力は、この端末に保存されています。接続すると自動で送信されます。'),
+      q.map((x) => h('div', { class: 'row tight hist' },
+        h('span', {}, `${x.payload.date.replace(/-/g, '/')}　${yen(x.payload.amount)}`),
+        x.failed ? h('span', { class: 'msg small-text' }, '送信できません: ' + x.failed) : h('span', { class: 'muted small-text' }, '送信待ち'),
+        x.failed && h('button', { type: 'button', class: 'btn small danger', onclick: async () => { if (confirm('この入力を破棄しますか？')) { await removeItem(x.qid); paintHome(body); } } }, '破棄'))),
+      h('button', { type: 'button', class: 'btn small primary', onclick: run }, '今すぐ送信'));
+  } catch { return null; }
+}
+
 /* ---------- ホーム ---------- */
 export async function paintHome(body) {
   fill(body, h('h2', {}, 'ホーム'), h('p', { class: 'muted' }, '読み込み中…'));
+  const pendCard = await pendingCard(body);
   try {
     await S.ensureBoot();
     const period = getPeriod(today(), S.startDay());
@@ -104,6 +129,7 @@ export async function paintHome(body) {
     fill(body, 
       h('h2', {}, 'ホーム'),
       h('p', { class: 'muted' }, `今月（${periodLabel(period)}）`),
+      pendCard,
       alertCard,
       h('div', { class: 'summary' },
         h('div', { class: 'card stat' }, h('span', { class: 'muted' }, '収入'), h('strong', { class: 'income' }, yen(income))),
@@ -119,7 +145,8 @@ export async function paintHome(body) {
           : h('p', { class: 'muted' }, 'まだ入力がありません。'))
     );
   } catch (e) {
-    fill(body, h('h2', {}, 'ホーム'), h('p', { class: 'msg' }, errText(e)));
+    fill(body, h('h2', {}, 'ホーム'), pendCard,
+      h('p', { class: e.code === 'NETWORK' ? 'muted' : 'msg' }, e.code === 'NETWORK' ? 'オフラインのため、集計を表示できません。入力は保存でき、接続後に送信されます。' : errText(e)));
   }
 }
 
