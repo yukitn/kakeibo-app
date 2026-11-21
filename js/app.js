@@ -134,7 +134,7 @@ function viewMain(tab) {
       try { await S.ensureBoot(); } catch (e) { return; }
       openEntry({ onSaved: refresh });
     }
-  }, '＋');
+  }, h('span', { class: 'fab-plus', 'aria-hidden': 'true' }, '＋'), h('span', {}, '入力'));
   render(h('div', { class: 'shell' }, nav, h('main', { class: 'main' }, body), fab));
   refresh();
 }
